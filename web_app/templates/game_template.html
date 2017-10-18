@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<h1>Conway's Game of Life</h1>
+<body>
+<canvas id="myCanvas" width="100" height="100" style="border:1px solid #666"></canvas>
+<p>
+    <input type="button" value="Start" id="buttonStart"/>
+    <input type="button" value="Reset" id="buttonReset"/>
+</p>
+<p>
+<ul>
+    <li id="numIterations">Iterations: 0</li>
+    <li id="boundary"></li>
+</ul>
+</p>
+<script>
+
+    // Variable declarations
+    var ctx;
+    var HEIGHT = {{ items['height'] }};
+    var WIDTH = {{ items['width'] }};
+    var CELL_SIZE = 2;
+    var STATE = 0;
+    var SPEED = {{ items['speed'] }};
+    var timeout;
+    var startButton = document.getElementById("buttonStart");
+    var resetButton = document.getElementById("buttonReset");
+    var LISTENING_PORT = {{ items['port'] }};
+
+    // "init" section
+    setupButtonListeners();
+    initializeBoard();
+    var ws = new WebSocket("ws://localhost:" + LISTENING_PORT + "/game_socket");
+    ws.onopen = function () {
+    };
+
+    function initializeBoard() {
+        document.getElementById("boundary").innerHTML = "Boundary: {{ items['boundary'] }}";
+        var canvas = document.getElementById('myCanvas');
+        canvas.id = 'myCanvas';
+        canvas.width = WIDTH * CELL_SIZE;
+        canvas.height = HEIGHT * CELL_SIZE;
+        ctx = canvas.getContext("2d");
+        var births = {{ items['births'] }};
+        fillBoard(births, '#000000');
+    }
+
+    // Draws current game state on canvas
+    function fillBoard(coordinates, color) {
+        ctx.fillStyle = color;
+        for (var i = 0; i < coordinates.length; i++) {
+            var row = coordinates[i][0];
+            var col = coordinates[i][1];
+            ctx.fillRect(col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        }
+    }
+
+    // Main game loop
+    function runGame() {
+        ws.send("");
+        ws.onmessage = function (evt) {
+            if (evt.data == 'STOP') {
+                stopTiming();
+                STATE = 0;
+                startButton.disabled = true;
+                resetButton.disabled = false;
+                return;
+            }
+            var items = JSON.parse(evt.data);
+            var births = items['births'];
+            var deaths = items['deaths'];
+
+            fillBoard(births, '#000000');
+            fillBoard(deaths, '#FFFFFF');
+            document.getElementById("numIterations").innerHTML = "Iterations: " + items['iterations'];
+        };
+        if (STATE == 1) {
+            startTiming();
+        }
+    }
+
+    // Handlers and helpers
+    
+    function setupButtonListeners() {
+        startButton.addEventListener('click', toggleStartStop);
+        resetButton.addEventListener('click', handleReset);
+    }
+
+    function toggleStartStop() {
+        STATE = !STATE;
+        if (STATE == 0) {
+            startButton.value = 'Start';
+            resetButton.disabled = false;
+        }
+        else {
+            startButton.value = 'Stop';
+            resetButton.disabled = true;
+            runGame();
+        }
+    }
+
+    function handleReset() {
+        ws.send("RESET");
+        startButton.value = 'Start';
+        startButton.disabled = false;
+        document.getElementById("numIterations").innerHTML = "Iterations: 0";
+        initializeBoard();
+    }
+
+    function startTiming() {
+        timeout = setTimeout(function () {
+            runGame();
+        }, SPEED);
+    }
+
+    function stopTiming() {
+        clearTimeout(timeout);
+    }
+
+</script>
+</body>
+</html>
